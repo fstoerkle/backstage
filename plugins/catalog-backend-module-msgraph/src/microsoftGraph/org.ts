@@ -55,7 +55,7 @@ export function buildOrgHierarchy(groups: GroupEntity[]) {
 // Ensure that users have their transitive group memberships. Requires that
 // the groups were previously processed with buildOrgHierarchy()
 export function buildMemberOf(groups: GroupEntity[], users: UserEntity[]) {
-  const groupsByName = new Map(groups.map(g => [g.metadata.name, g]));
+  const groupsByName = new Map(groups.map(g => [`group:default/${g.metadata.name}`, g]));
 
   users.forEach(user => {
     const transitiveMemberOf = new Set<string>();
