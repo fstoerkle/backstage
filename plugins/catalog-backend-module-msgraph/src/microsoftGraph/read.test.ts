@@ -22,7 +22,7 @@ import {
   readMicrosoftGraphOrg,
   readMicrosoftGraphOrganization,
   readMicrosoftGraphUsers,
-  readMicrosoftGraphUsersInGroups,
+  readMicrosoftGraphMembersInGroups,
   resolveRelations,
 } from './read';
 import { getVoidLogger } from '@backstage/backend-common';
@@ -244,7 +244,7 @@ describe('read microsoft graph', () => {
         'data:image/jpeg;base64,...',
       );
 
-      const { users } = await readMicrosoftGraphUsersInGroups(client, {
+      const { users } = await readMicrosoftGraphMembersInGroups(client, {
         userGroupMemberFilter: 'securityEnabled eq true',
         logger: getVoidLogger(),
       });
@@ -301,7 +301,7 @@ describe('read microsoft graph', () => {
         'data:image/jpeg;base64,...',
       );
 
-      const { users } = await readMicrosoftGraphUsersInGroups(client, {
+      const { users } = await readMicrosoftGraphMembersInGroups(client, {
         queryMode: 'advanced',
         userGroupMemberFilter: 'securityEnabled eq true',
         logger: getVoidLogger(),
@@ -359,7 +359,7 @@ describe('read microsoft graph', () => {
         'data:image/jpeg;base64,...',
       );
 
-      const { users } = await readMicrosoftGraphUsersInGroups(client, {
+      const { users } = await readMicrosoftGraphMembersInGroups(client, {
         userExpand: 'manager',
         userGroupMemberFilter: 'securityEnabled eq true',
         groupExpand: 'member',

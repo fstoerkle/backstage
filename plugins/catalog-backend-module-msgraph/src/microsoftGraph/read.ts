@@ -75,7 +75,7 @@ export async function readMicrosoftGraphUsers(
   };
 }
 
-export async function readMicrosoftGraphUsersInGroups(
+export async function readMicrosoftGraphMembersInGroups(
   client: MicrosoftGraphClient,
   options: {
     queryMode?: 'basic' | 'advanced';
@@ -85,16 +85,19 @@ export async function readMicrosoftGraphUsersInGroups(
     userGroupMemberSearch?: string;
     userGroupMemberFilter?: string;
     groupExpand?: string;
-    transformer?: UserTransformer;
+    userTransformer?: UserTransformer;
+    groupTransformer?: GroupTransformer;
     logger: Logger;
   },
 ): Promise<{
   users: UserEntity[]; // With all relations empty
+  groups: GroupEntity[]; // With all relations empty
 }> {
   const limiter = limiterFactory(10);
 
   const userGroupMemberPromises: Promise<void>[] = [];
   const userGroupMembers = new Map<string, MicrosoftGraph.User>();
+  const groupGroupMembers = new Map<string, MicrosoftGraph.Group>();
 
   for await (const group of client.getGroups(
     {
@@ -110,7 +113,7 @@ export async function readMicrosoftGraphUsersInGroups(
     userGroupMemberPromises.push(
       limiter(async () => {
         let groupMemberCount = 0;
-        for await (const user of client.getGroupUserMembers(
+        for await (const member of client.getGroupMembers(
           group.id!,
           {
             expand: options.userExpand,
@@ -120,7 +123,12 @@ export async function readMicrosoftGraphUsersInGroups(
           },
           options.queryMode,
         )) {
-          userGroupMembers.set(user.id!, user);
+          if (member['@odata.type'] === '#microsoft.graph.user') {
+            userGroupMembers.set(member.id!, member);
+          }
+          if (member['@odata.type'] === '#microsoft.graph.group') {
+            groupGroupMembers.set(member.id!, member);
+          }
           groupMemberCount++;
         }
         options.logger.debug('Read users from group', {
@@ -145,7 +153,13 @@ export async function readMicrosoftGraphUsersInGroups(
       client,
       userGroupMembers.values(),
       options.logger,
-      options.transformer,
+      options.userTransformer,
+    ),
+    groups: await transformGroups(
+      client,
+      groupGroupMembers.values(),
+      options.logger,
+      options.groupTransformer,
     ),
   };
 }
@@ -380,22 +394,23 @@ export async function readMicrosoftGraphOrg(
   },
 ): Promise<{ users: UserEntity[]; groups: GroupEntity[] }> {
   const users: UserEntity[] = [];
+  const groupsInGroups: GroupEntity[] = [];
 
   if (options.userGroupMemberFilter || options.userGroupMemberSearch) {
-    const { users: usersInGroups } = await readMicrosoftGraphUsersInGroups(
-      client,
-      {
+    const { users: usersInGroups, groups } =
+      await readMicrosoftGraphMembersInGroups(client, {
         queryMode: options.queryMode,
         userExpand: options.userExpand,
         userFilter: options.userFilter,
         userSelect: options.userSelect,
         userGroupMemberFilter: options.userGroupMemberFilter,
         userGroupMemberSearch: options.userGroupMemberSearch,
-        transformer: options.userTransformer,
+        userTransformer: options.userTransformer,
+        groupTransformer: options.groupTransformer,
         logger: options.logger,
-      },
-    );
+      });
     users.push(...usersInGroups);
+    groupsInGroups.push(...groups);
   } else {
     const { users: usersWithFilter } = await readMicrosoftGraphUsers(client, {
       queryMode: options.queryMode,
@@ -418,11 +433,14 @@ export async function readMicrosoftGraphOrg(
       organizationTransformer: options.organizationTransformer,
     });
 
-  resolveRelations(rootGroup, groups, users, groupMember, groupMemberOf);
+  // FIXME: ensure uniqueness of groups
+  const allGroups = [...groupsInGroups, ...groups];
+
+  resolveRelations(rootGroup, allGroups, users, groupMember, groupMemberOf);
   users.sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
   groups.sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
 
-  return { users, groups };
+  return { users, groups: allGroups };
 }
 
 async function transformUsers(
@@ -471,6 +489,56 @@ async function transformUsers(
   logger.debug('Finished transforming users', {
     microsoftUserCount: promises.length,
     backstageUserCount: entities.length,
+  });
+  return entities;
+}
+
+async function transformGroups(
+  client: MicrosoftGraphClient,
+  groups: Iterable<MicrosoftGraph.Group> | AsyncIterable<MicrosoftGraph.Group>,
+  logger: Logger,
+  transformer?: GroupTransformer,
+) {
+  const limiter = limiterFactory(10);
+
+  const resolvedTransformer = transformer ?? defaultGroupTransformer;
+  const promises: Promise<void>[] = [];
+  const entities: GroupEntity[] = [];
+
+  // Process all groups in parallel, otherwise it can take quite some time
+  for await (const group of groups) {
+    promises.push(
+      limiter(async () => {
+        let groupPhoto;
+        try {
+          groupPhoto = await client.getGroupPhotoWithSizeLimit(
+            group.id!,
+            // We are limiting the photo size, as users with full resolution photos
+            // can make the Backstage API slow
+            120,
+          );
+        } catch (e) {
+          logger.warn(`Unable to load group photo for`, {
+            group: group.id,
+            error: e,
+          });
+        }
+
+        const entity = await resolvedTransformer(group, groupPhoto);
+
+        if (entity) {
+          entities.push(entity);
+        }
+      }),
+    );
+  }
+
+  // Wait for all groups and photos to be downloaded
+  await Promise.all(promises);
+
+  logger.debug('Finished transforming groups', {
+    microsoftGroupCount: promises.length,
+    backstageGroupCount: entities.length,
   });
   return entities;
 }
