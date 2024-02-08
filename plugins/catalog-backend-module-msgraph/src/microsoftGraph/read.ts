@@ -84,6 +84,7 @@ export async function readMicrosoftGraphMembersInGroups(
     userSelect?: string[];
     userGroupMemberSearch?: string;
     userGroupMemberFilter?: string;
+    userGroupMemberIncludeGroups?: boolean;
     groupExpand?: string;
     userTransformer?: UserTransformer;
     groupTransformer?: GroupTransformer;
@@ -126,9 +127,14 @@ export async function readMicrosoftGraphMembersInGroups(
           if (member['@odata.type'] === '#microsoft.graph.user') {
             userGroupMembers.set(member.id!, member);
           }
-          if (member['@odata.type'] === '#microsoft.graph.group') {
-            groupGroupMembers.set(member.id!, member);
+
+          // FIXME: we probably don't want to fetch groups in the first place if this options is not set
+          if (options.userGroupMemberIncludeGroups) {
+            if (member['@odata.type'] === '#microsoft.graph.group') {
+              groupGroupMembers.set(member.id!, member);
+            }
           }
+
           groupMemberCount++;
         }
         options.logger.debug('Read users from group', {
@@ -382,6 +388,7 @@ export async function readMicrosoftGraphOrg(
     userSelect?: string[];
     userGroupMemberSearch?: string;
     userGroupMemberFilter?: string;
+    userGroupMemberIncludeGroups?: boolean;
     groupExpand?: string;
     groupSearch?: string;
     groupFilter?: string;
@@ -405,6 +412,7 @@ export async function readMicrosoftGraphOrg(
         userSelect: options.userSelect,
         userGroupMemberFilter: options.userGroupMemberFilter,
         userGroupMemberSearch: options.userGroupMemberSearch,
+        userGroupMemberIncludeGroups: options.userGroupMemberIncludeGroups,
         userTransformer: options.userTransformer,
         groupTransformer: options.groupTransformer,
         logger: options.logger,

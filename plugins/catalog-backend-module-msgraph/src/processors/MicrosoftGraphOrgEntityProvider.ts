@@ -312,6 +312,7 @@ export class MicrosoftGraphOrgEntityProvider implements EntityProvider {
         userSelect: provider.userSelect,
         userGroupMemberFilter: provider.userGroupMemberFilter,
         userGroupMemberSearch: provider.userGroupMemberSearch,
+        userGroupMemberIncludeGroups: provider.userGroupMemberIncludeGroups,
         groupExpand: provider.groupExpand,
         groupFilter: provider.groupFilter,
         groupSearch: provider.groupSearch,

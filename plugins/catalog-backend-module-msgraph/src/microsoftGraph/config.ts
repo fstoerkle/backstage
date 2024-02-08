@@ -91,6 +91,13 @@ export type MicrosoftGraphProviderConfig = {
    */
   userGroupMemberSearch?: string;
   /**
+   * Whether to include groups that are members of the groups as well.
+   * Defaults to `false`.
+   *
+   * E.g. `true`
+   */
+  userGroupMemberIncludeGroups?: boolean;
+  /**
    * The "expand" argument to apply to groups.
    *
    * E.g. "member".
@@ -287,6 +294,10 @@ export function readProviderConfig(
     'userGroupMember.search',
   );
 
+  const userGroupMemberIncludeGroups = config.getOptionalBoolean(
+    'userGroupMember.includeGroups',
+  );
+
   if (userFilter && userGroupMemberFilter) {
     throw new Error(
       `userFilter and userGroupMemberFilter are mutually exclusive, only one can be specified.`,
@@ -327,6 +338,7 @@ export function readProviderConfig(
     queryMode,
     userGroupMemberFilter,
     userGroupMemberSearch,
+    userGroupMemberIncludeGroups,
     schedule,
   };
 }
